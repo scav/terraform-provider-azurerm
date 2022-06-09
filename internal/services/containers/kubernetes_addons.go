@@ -26,6 +26,7 @@ const (
 	ingressApplicationGatewayKey    = "ingressApplicationGateway"
 	openServiceMeshKey              = "openServiceMesh"
 	azureKeyvaultSecretsProviderKey = "azureKeyvaultSecretsProvider"
+	confComKey                      = "ACCSGXDevicePlugin"
 )
 
 // The AKS API hard-codes which add-ons are supported in which environment
@@ -237,6 +238,11 @@ func schemaKubernetesAddOns() map[string]*pluginsdk.Schema {
 				},
 			},
 		},
+		//confcom
+		"confcom_enabled": {
+			Type:     pluginsdk.TypeBool,
+			Optional: true,
+		},
 	}
 
 	return out
@@ -354,6 +360,16 @@ func expandKubernetesAddOns(d *pluginsdk.ResourceData, input map[string]interfac
 		}
 	} else if len(azureKeyVaultSecretsProvider) == 0 && d.HasChange("key_vault_secrets_provider") {
 		addonProfiles[azureKeyvaultSecretsProviderKey] = &disabled
+	}
+
+	if ok := d.HasChange("confcom_enabled"); ok {
+		config := make(map[string]*string)
+		config["CONST_ACC_SGX_QUOTE_HELPER_ENABLED"] = utils.String("true")
+
+		addonProfiles[confComKey] = &containerservice.ManagedClusterAddonProfile{
+			Enabled: utils.Bool(input["confcom_enabled"].(bool)),
+			Config:  config,
+		}
 	}
 
 	return filterUnsupportedKubernetesAddOns(addonProfiles, env)
@@ -513,6 +529,13 @@ func flattenKubernetesAddOns(profile map[string]*containerservice.ManagedCluster
 		}
 	}
 
+	confComEnabled := false
+	if confCom := kubernetesAddonProfileLocate(profile, confComKey); confCom != nil {
+		if enabledVal := confCom.Enabled; enabledVal != nil {
+			confComEnabled = *enabledVal
+		}
+	}
+
 	return map[string]interface{}{
 		"aci_connector_linux":                aciConnectors,
 		"azure_policy_enabled":               azurePolicyEnabled,
@@ -522,6 +545,7 @@ func flattenKubernetesAddOns(profile map[string]*containerservice.ManagedCluster
 		"ingress_application_gateway":        ingressApplicationGateways,
 		"open_service_mesh_enabled":          openServiceMeshEnabled,
 		"key_vault_secrets_provider":         azureKeyVaultSecretsProviders,
+		"confcom_enabled":                    confComEnabled,
 	}
 }
 
@@ -564,6 +588,7 @@ func collectKubernetesAddons(d *pluginsdk.ResourceData) map[string]interface{} {
 		"ingress_application_gateway":      d.Get("ingress_application_gateway").([]interface{}),
 		"open_service_mesh_enabled":        d.Get("open_service_mesh_enabled").(bool),
 		"key_vault_secrets_provider":       d.Get("key_vault_secrets_provider").([]interface{}),
+		"confcom_enabled":                  d.Get("confcom_enabled").(bool),
 	}
 }
 
